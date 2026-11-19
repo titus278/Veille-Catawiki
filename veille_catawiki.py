@@ -4,14 +4,13 @@ from email.message import EmailMessage
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
-# ================= PARAMÈTRES À REMPLIR =================
+MOTS_EXCLUS = ["pièces", "parts", "bracelet seul", "boîte seule"]
+
 RECHERCHES = []
 for ligne in Path("recherches.txt").read_text(encoding="utf-8").splitlines():
     if ";" in ligne and not ligne.strip().startswith("#"):
         mots, budget = ligne.split(";", 1)
         RECHERCHES.append({"mots_cles": mots.strip(), "budget_max": int(budget.strip())})
-MOTS_EXCLUS = ["pièces", "parts", "bracelet seul", "boîte seule"]
-# =========================================================
 
 EMAIL = os.environ["EMAIL"]
 MDP = os.environ["EMAIL_MDP_APPLI"]
@@ -24,15 +23,23 @@ def prix(texte):
 
 nouveaux = []
 with sync_playwright() as pw:
-    page = pw.chromium.launch().new_page()
-    for r in RECHERCHES:
-        page.goto("https://www.catawiki.com/fr/s?q=" + r["mots_cles"].replace(" ", "+"),
-                  wait_until="networkidle")
-        page.wait_for_timeout(3000)
-        for a in page.query_selector_all("a[href*='/l/']"):
-            h = a.get_attribute("href").split("?")[0]
+    nav = pw.chromium.launch()
+    page = nav.new_page(
+        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                   "(KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+        locale="fr-FR")
+    for i, r in enumerate(RECHERCHES):
+        url = "https://www.catawiki.com/fr/s?q=" + r["mots_cles"].replace(" ", "+")
+        page.goto(url, wait_until="domcontentloaded")
+        page.wait_for_timeout(6000)
+        liens = page.query_selector_all("a[href*='/l/']")
+        print(f"[{r['mots_cles']}] titre: {page.title()!r} | liens trouvés: {len(liens)}")
+        if i == 0:
+            print("DEBUT DE PAGE:", page.inner_text("body")[:500].replace("\n", " "))
+        for a in liens:
+            h = (a.get_attribute("href") or "").split("?")[0]
             t = a.inner_text()
-            if h in vus or any(x.lower() in t.lower() for x in MOTS_EXCLUS):
+            if not h or h in vus or any(x.lower() in t.lower() for x in MOTS_EXCLUS):
                 continue
             p = prix(t)
             if p is None or p <= r["budget_max"]:
@@ -40,6 +47,7 @@ with sync_playwright() as pw:
                 vus.add(h)
         time.sleep(random.uniform(5, 15))
 
+print(f"TOTAL nouveaux lots: {len(nouveaux)}")
 if nouveaux:
     msg = EmailMessage()
     msg["Subject"] = f"Catawiki : {len(nouveaux)} nouveau(x) lot(s)"
