@@ -44,7 +44,7 @@ nouveaux = []
 for r in RECHERCHES:
     url = "https://www.catawiki.com/fr/s?q=" + r["mots_cles"].replace(" ", "+")
     rep = requests.get(url, impersonate="chrome", timeout=30)
-    m = re.search(r'', rep.text, re.S)
+    m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', rep.text, re.S)
     if not m:
         print(f"[{r['mots_cles']}] code {rep.status_code} — pas de données. Début: {rep.text[:200]!r}")
         continue
