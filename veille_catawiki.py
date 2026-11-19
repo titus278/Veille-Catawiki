@@ -1,8 +1,8 @@
-# veille_catawiki.py
+# veille_catawiki.py — version alternative (données __NEXT_DATA__)
 import json, os, re, smtplib, time, random
 from email.message import EmailMessage
 from pathlib import Path
-from playwright.sync_api import sync_playwright
+from curl_cffi import requests
 
 MOTS_EXCLUS = ["pièces", "parts", "bracelet seul", "boîte seule"]
 
@@ -17,35 +17,49 @@ MDP = os.environ["EMAIL_MDP_APPLI"]
 FICHIER_VUS = Path("lots_deja_vus.json")
 vus = set(json.loads(FICHIER_VUS.read_text())) if FICHIER_VUS.exists() else set()
 
-def prix(texte):
-    m = re.search(r"€\s?([\d\s\u202f.]+)", texte)
-    return int(re.sub(r"\D", "", m.group(1))) if m else None
+def trouver_lots(obj, acc):
+    """Parcourt les données et garde tout objet qui ressemble à un lot."""
+    if isinstance(obj, dict):
+        titre = obj.get("title") or obj.get("name")
+        lid = obj.get("id") or obj.get("lotId")
+        if titre and lid and isinstance(titre, str):
+            acc.append(obj)
+        for v in obj.values():
+            trouver_lots(v, acc)
+    elif isinstance(obj, list):
+        for v in obj:
+            trouver_lots(v, acc)
+    return acc
+
+def prix_du_lot(lot):
+    for cle in ("currentBidAmount", "current_bid", "bidAmount", "price", "amount"):
+        v = lot.get(cle)
+        if isinstance(v, dict):
+            v = v.get("EUR") or v.get("amount") or v.get("value")
+        if isinstance(v, (int, float)):
+            return int(v)
+    return None
 
 nouveaux = []
-with sync_playwright() as pw:
-    nav = pw.chromium.launch()
-    page = nav.new_page(
-        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                   "(KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-        locale="fr-FR")
-    for i, r in enumerate(RECHERCHES):
-        url = "https://www.catawiki.com/fr/s?q=" + r["mots_cles"].replace(" ", "+")
-        page.goto(url, wait_until="domcontentloaded")
-        page.wait_for_timeout(6000)
-        liens = page.query_selector_all("a[href*='/l/']")
-        print(f"[{r['mots_cles']}] titre: {page.title()!r} | liens trouvés: {len(liens)}")
-        if i == 0:
-            print("DEBUT DE PAGE:", page.inner_text("body")[:500].replace("\n", " "))
-        for a in liens:
-            h = (a.get_attribute("href") or "").split("?")[0]
-            t = a.inner_text()
-            if not h or h in vus or any(x.lower() in t.lower() for x in MOTS_EXCLUS):
-                continue
-            p = prix(t)
-            if p is None or p <= r["budget_max"]:
-                nouveaux.append((h, t.strip().replace("\n", " | "), p))
-                vus.add(h)
-        time.sleep(random.uniform(5, 15))
+for r in RECHERCHES:
+    url = "https://www.catawiki.com/fr/s?q=" + r["mots_cles"].replace(" ", "+")
+    rep = requests.get(url, impersonate="chrome", timeout=30)
+    m = re.search(r'', rep.text, re.S)
+    if not m:
+        print(f"[{r['mots_cles']}] code {rep.status_code} — pas de données. Début: {rep.text[:200]!r}")
+        continue
+    lots = trouver_lots(json.loads(m.group(1)), [])
+    print(f"[{r['mots_cles']}] code {rep.status_code} — {len(lots)} lots lus")
+    for lot in lots:
+        lid = str(lot.get("id") or lot.get("lotId"))
+        titre = lot.get("title") or lot.get("name")
+        if lid in vus or any(x.lower() in titre.lower() for x in MOTS_EXCLUS):
+            continue
+        p = prix_du_lot(lot)
+        if p is None or p <= r["budget_max"]:
+            nouveaux.append((lid, titre, p))
+            vus.add(lid)
+    time.sleep(random.uniform(5, 15))
 
 print(f"TOTAL nouveaux lots: {len(nouveaux)}")
 if nouveaux:
@@ -53,7 +67,7 @@ if nouveaux:
     msg["Subject"] = f"Catawiki : {len(nouveaux)} nouveau(x) lot(s)"
     msg["From"] = msg["To"] = EMAIL
     msg.set_content("\n\n".join(
-        f"{t}\nOffre : {p or '?'} €\nhttps://www.catawiki.com{h}" for h, t, p in nouveaux))
+        f"{t}\nOffre : {p or '?'} €\nhttps://www.catawiki.com/fr/l/{i}" for i, t, p in nouveaux))
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s:
         s.login(EMAIL, MDP)
         s.send_message(msg)
