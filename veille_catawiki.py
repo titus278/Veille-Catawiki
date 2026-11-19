@@ -5,10 +5,11 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 # ================= PARAMÈTRES À REMPLIR =================
-RECHERCHES = [
-    {"mots_cles": "Cartier Santos", "budget_max": 3000},
-    {"mots_cles": "Rolex Datejust", "budget_max": 4500},
-]
+RECHERCHES = []
+for ligne in Path("recherches.txt").read_text(encoding="utf-8").splitlines():
+    if ";" in ligne and not ligne.strip().startswith("#"):
+        mots, budget = ligne.split(";", 1)
+        RECHERCHES.append({"mots_cles": mots.strip(), "budget_max": int(budget.strip())})
 MOTS_EXCLUS = ["pièces", "parts", "bracelet seul", "boîte seule"]
 # =========================================================
 
