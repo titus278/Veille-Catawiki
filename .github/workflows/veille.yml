@@ -2,7 +2,7 @@
 name: Veille Catawiki
 on:
   schedule:
-    - cron: "17 * * * *"
+    - cron: "0 4 * * *"
   workflow_dispatch:
 permissions:
   contents: write
