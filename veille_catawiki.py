@@ -4,8 +4,7 @@ from email.message import EmailMessage
 from pathlib import Path
 from curl_cffi import requests
 
-MOTS_EXCLUS = ["pièces", "parts", "bracelet seul", "boîte seule", "quartz", "quarz"]
-
+MOTS_EXCLUS = ["pièces", "parts", "bracelet seul", "boîte seule", "quartz", "quarz", "redial", "refinished", "repainted", "cadran refait", "repeint"]
 RECHERCHES = []
 for ligne in Path("recherches.txt").read_text(encoding="utf-8").splitlines():
     if ";" in ligne and not ligne.strip().startswith("#"):
