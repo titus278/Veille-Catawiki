@@ -31,3 +31,12 @@ IWC 854 ; 1500
 Universal Geneve Polerouter ; 1800
 Sinn 156 ; 2300
 Tudor Black Bay 58 ; 2700
+Sinn 556 ; 1100
+Sinn 104 ; 1200
+Sinn 103 ; 1600
+Sinn U1 ; 1600
+Sinn 356 ; 2000
+Fortis Cosmonauts Lemania ; 1700
+Muhle Rescue Timer ; 1400
+Nomos Tangente neomatik ; 1800
+Tudor Ranger 79950 ; 2400
